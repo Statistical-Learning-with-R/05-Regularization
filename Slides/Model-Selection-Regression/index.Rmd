@@ -1,0 +1,266 @@
+---
+title: "Model Selection in Regression"
+resource_files:
+- appforthat.jpg
+output:
+  xaringan::moon_reader:
+    css: xaringan-themer.css
+    lib_dir: libs
+    nature:
+      highlightLines: yes
+      highlightStyle: github
+      countIncrementalSlides: FALSE
+      ratio: '16:9'
+
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(message = FALSE, warning = FALSE)
+
+library(tidyverse)
+library(tidymodels)
+library(flair)
+library(kknn)
+library(glmnet)
+library(here)
+library(rpart.plot)
+library(discrim)
+
+set.seed(98249)
+```
+
+```{r xaringan-themer, include=FALSE}
+library(xaringanthemer)
+library(xaringanExtra)
+style_mono_light(
+  base_color = "#26116c",
+  text_bold_color = "#fd5e53",
+  title_slide_text_color = "#fff8e7",
+  background_color = "#fff8e7",
+  header_font_google = google_font("Roboto"),
+  text_font_google   = google_font("Roboto Condensed"),
+  code_font_google   = google_font("Droid Mono")
+)
+```
+
+```{css, echo = FALSE}
+.red{ color: red; }
+.blue{ color: blue; }
+.huge {
+  font-size: 200%;
+}
+.large {
+  font-size: 150%;
+}
+.tiny {
+  font-size: 50%;
+}
+```
+---
+class: center, middle, inverse
+
+# Variable Selection
+
+---
+## Variable Selection
+
+Why might we **not** want to include all the variables available to us?
+
+--
+
+* **Overfitting:**  Using many extra variables gives the model more flexibility; it might be to tailored to the training data.
+    + Recall:  Polynomials in week 1
+
+--
+
+* **Interpretability:** We'd like to know which variables "matter most" to the response, and have accurate coefficient estimates.
+    + What if two variables measure the same information?
+    + What if the variables are *linearly dependent*?
+    
+---
+## Data
+
+Recall:  62 unique words describing Cannabis strains.
+New Response variable: `Rating`
+
+```{r}
+cann <- read_csv("https://www.dropbox.com/s/s2a1uoiegitupjc/cannabis_full.csv?dl=1")
+
+cann <- cann %>%
+  select(-Type, -Strain, -Effects, -Flavor, -Dry, -Mouth)
+
+head(cann)
+```
+
+    
+---
+## Option 1: Best Subset Selection
+
+Let's try **every possible subset** of variables and pick the best one.
+
+--
+
+What do we mean by **best**?
+
+--
+
+Penalized metrics:
+
+* BIC
+* AIC
+* Mallow's Cp
+* Adjusted R-squared
+
+--
+
+Cross-Validation???
+
+---
+## Option 1: Best Subset Selection
+
+The problem:
+
+--
+
+```
+Rating ~ Creative
+Rating ~ Creative + Energetic
+Rating ~ Creative + Energetic + Tingly
+Rating ~ Creative + Tingly
+...
+```
+
+--
+
+62 variables = 4.6 quintillion models
+
+--
+
+(Plus cross-validation????)
+
+---
+class: center, middle
+
+![](https://media0.giphy.com/media/LSQcHeCzIxfmUoV2mj/200.gif)
+
+---
+## Option 1: Best Subset Selection
+
+If you have only a few variables, go for it.
+
+--
+
+In realistic settings, it's not practical.
+
+--
+
+Use the `leaps` package.
+
+---
+## Best Subset Selection with `leaps`
+
+Best model of each size, based on R-squared:
+
+```{r}
+library(leaps)
+models <- regsubsets(Rating ~ Creative + Energetic + Tingly, 
+                     data = cann, method = "exhaustive")
+
+summary(models)
+```
+---
+class: center, middle, inverse
+
+# Why can we compare same-size models via R-squared, not penalized metrics or cross-validation?
+
+---
+## Best Subset Selection with `leaps`
+
+Now compare same-size models:
+
+```{r}
+summary(models)$adjr2  # bigger is better
+summary(models)$cp     # smaller is better
+summary(models)$bic    # more negative is better
+```
+
+---
+## Option 2: Backwards Selection
+
+Start with **all** candidate variables in the model.
+
+--
+
+Drop the *worst* variable.  (p-vals or R-squared)
+
+--
+
+Check if dropping it helped.  (penalized metric or cross-validation)
+
+--
+
+Stop when dropping is no longer good.
+
+---
+## Backwards selection with `leaps`
+
+```{r}
+
+models <- regsubsets(Rating ~ ., 
+                     data = cann, method = "forward",
+                     nvmax = 61)
+
+summary(models)
+```
+
+---
+## Backwards selection with `leaps`
+
+```{r}
+bic_scores <- summary(models)$bic
+bic_scores
+```
+
+---
+## Backwards selection with `leaps`
+
+```{r, echo = FALSE}
+ggplot(, aes(x = 1:61, y = bic_scores)) +
+  geom_point()
+```
+
+---
+## Backwards selection with `leaps`
+
+```{r}
+which.min(bic_scores)
+summary(models)$outmat[13,]
+```
+
+---
+## Option 1: Best Subset Selection
+
+Start with **one variable** that you think is best.
+
+--
+
+Add the *next best variable*.
+
+--
+
+Test whether it was worth adding.
+
+--
+
+Keep going until it's not worth adding any more variables.
+
+---
+class: center, middle, inverse
+
+# Try it!
+
+## Open **Activity-Variable-Selection**
+#### Determine the best model via **backwards selection**.  Fit that model to the data and report results.
+#### Determine the best model via **forwards selection**.  Fit that model to the data and report results.
+
+

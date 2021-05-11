@@ -1,0 +1,169 @@
+---
+title: "Regularization:  LASSO and Ridge Regression"
+resource_files:
+- appforthat.jpg
+output:
+  xaringan::moon_reader:
+    css: xaringan-themer.css
+    lib_dir: libs
+    nature:
+      highlightLines: yes
+      highlightStyle: github
+      countIncrementalSlides: FALSE
+      ratio: '16:9'
+
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(message = FALSE, warning = FALSE)
+
+library(tidyverse)
+library(tidymodels)
+library(flair)
+library(kknn)
+library(glmnet)
+library(here)
+library(rpart.plot)
+library(discrim)
+
+set.seed(98249)
+```
+
+```{r xaringan-themer, include=FALSE}
+library(xaringanthemer)
+library(xaringanExtra)
+style_mono_light(
+  base_color = "#26116c",
+  text_bold_color = "#fd5e53",
+  title_slide_text_color = "#fff8e7",
+  background_color = "#fff8e7",
+  header_font_google = google_font("Roboto"),
+  text_font_google   = google_font("Roboto Condensed"),
+  code_font_google   = google_font("Droid Mono")
+)
+```
+
+```{css, echo = FALSE}
+.red{ color: red; }
+.blue{ color: blue; }
+.huge {
+  font-size: 200%;
+}
+.large {
+  font-size: 150%;
+}
+.tiny {
+  font-size: 50%;
+}
+```
+---
+class: center, middle, inverse
+
+# Variable Selection
+
+---
+## Variable Selection
+
+Reasons to dislike **forward/backward/subset selection**:
+
+--
+
+* Computationally intensive - too many variables!
+
+--
+
+* Hard to use cross-validation; have to choose a penalized metric.
+
+--
+
+* "Best subset" is almost never feasible; forward/backward might miss a better option!
+
+---
+## Regularization
+
+Instead: We adjust our **loss function** that we use to estimate coefficients.
+
+--
+
+**Ordinary Linear Regression:** 
+
+minimize squared error:
+
+.large[.center[sum of (predicted - truth)^2]]
+
+---
+## Regularization
+
+We would like to make it "harder" to allow variables into the model.
+
+--
+
+**Regularized Regression:** 
+
+minimize squared error **plus** penalty:
+
+.large[.center[sum of (predicted - truth)^2 + (penalty on betas)]]
+
+---
+## LASSO
+
+The **LASSO** (least absolute shrinkage and selection operator) says "big coefficients are bad"
+
+--
+
+$$ \sum (\hat{y}_i - y_i)^2 + \lambda \sum | \beta_j | $$
+
+--
+
+.center[ RSS + (penalty)*(sum of coefficients)]
+
+---
+## LASSO
+
+```{r}
+lasso_spec <- linear_reg(penalty = 0.1, mixture = 1) %>%
+  set_engine("glmnet") %>%
+  set_mode("regression")
+```
+
+--
+
+**penalty**:  $\lambda$
+**mixture**:  We use the absolute value of the betas.
+
+---
+## Ridge Regression
+
+**Ridge Regression** says "big coefficients are bad, and bigger coefficients are REALLY bad"
+
+--
+
+$$ \sum (\hat{y}_i - y_i)^2 + \lambda \sum \beta_j^2 $$
+
+--
+
+.center[ RSS + (penalty)*(sum of coefficients squared)]
+
+---
+## Ridge Regression
+
+```{r}
+ridge_spec <- linear_reg(penalty = 0.1, mixture = 0) %>%
+  set_engine("glmnet") %>%
+  set_mode("regression")
+```
+
+---
+class: center, middle, inverse
+
+# Try it!
+
+## Open **Activity-Variable-Selection**
+
+#### Fit a **LASSO** model to the cannabis data with lambda = 0.1.  Then fit one with lambda = 0.5.  What is different?
+
+#### Fit a **Ridge Regression** model to the cannabis data with lambda = 0.1.  Then fit one with lambda = 0.5.  What is different?
+
+#### Which model do you prefer?
+
+#### (Bonus)  What is the best choice of lambda?
