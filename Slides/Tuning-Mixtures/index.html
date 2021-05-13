@@ -1,0 +1,542 @@
+<!DOCTYPE html>
+<html lang="" xml:lang="">
+  <head>
+    <title>Tuning Mixtures and Penalties</title>
+    <meta charset="utf-8" />
+    <script src="libs/header-attrs-2.7/header-attrs.js"></script>
+    <link rel="stylesheet" href="xaringan-themer.css" type="text/css" />
+  </head>
+  <body>
+    <textarea id="source">
+class: center, middle, inverse, title-slide
+
+# Tuning Mixtures and Penalties
+
+---
+
+
+
+
+
+
+&lt;style type="text/css"&gt;
+.red{ color: red; }
+.blue{ color: blue; }
+.huge {
+  font-size: 200%;
+}
+.large {
+  font-size: 150%;
+}
+.tiny {
+  font-size: 50%;
+}
+&lt;/style&gt;
+---
+class: center, middle, inverse
+
+# The Penalty Hyperparameter
+
+---
+## Penalty Hyperparameter
+
+Recall:  In **ridge** and **LASSO** regression, we add a *penalty* term that is balanced by a parameter `\(\lambda\)`
+
+--
+
+`$$\text{minimize:} \; \;  RSS + \lambda * \text{penalty}$$`
+
+---
+## Penalty Hyperparameter
+
+What is the "best" choice of `\(\lambda\)`?
+
+--
+
+![](https://media2.giphy.com/media/oBsRsvl2EfHMI/giphy.gif)
+
+---
+class: center, middle
+
+![](https://upload.wikimedia.org/wikipedia/en/4/44/Try_Everything_%28Shakira%29.jpg)
+
+---
+## Penalty Parameter
+
+Last class, we tried two LASSO models:
+
+
+
+```r
+lasso_1 &lt;- linear_reg(penalty = 0.1, mixture = 1) %&gt;%
+  set_engine("glmnet") %&gt;%
+  set_mode("regression")
+
+lasso_5 &lt;- linear_reg(penalty = 0.5, mixture = 1) %&gt;%
+  set_engine("glmnet") %&gt;%
+  set_mode("regression")
+```
+
+---
+## Penalty Parameter
+
+We found that larger penalty parameter led to more coefficients of 0  (i.e., excluded variables):
+
+
+
+
+.pull-left[
+
+
+```
+## # A tibble: 63 x 3
+##    term        estimate penalty
+##    &lt;chr&gt;          &lt;dbl&gt;   &lt;dbl&gt;
+##  1 (Intercept) 3.81         0.1
+##  2 Creative    0.0252       0.1
+##  3 Energetic   0.000327     0.1
+##  4 Tingly      0            0.1
+##  5 Euphoric    0.115        0.1
+##  6 Relaxed     0.188        0.1
+##  7 Aroused     0            0.1
+##  8 Happy       0.268        0.1
+##  9 Uplifted    0.108        0.1
+## 10 Hungry      0            0.1
+## # ... with 53 more rows
+```
+
+]
+
+.pull-left[
+
+
+```
+## # A tibble: 63 x 3
+##    term        estimate penalty
+##    &lt;chr&gt;          &lt;dbl&gt;   &lt;dbl&gt;
+##  1 (Intercept)     4.32     0.5
+##  2 Creative        0        0.5
+##  3 Energetic       0        0.5
+##  4 Tingly          0        0.5
+##  5 Euphoric        0        0.5
+##  6 Relaxed         0        0.5
+##  7 Aroused         0        0.5
+##  8 Happy           0        0.5
+##  9 Uplifted        0        0.5
+## 10 Hungry          0        0.5
+## # ... with 53 more rows
+```
+
+]
+
+---
+## Penalty Parameter
+
+`\(\lambda = 0.1 \rightarrow\)`  7 variables kept, 56 dropped
+
+`\(\lambda = 0.5 \rightarrow\)`  0 variables kept, 63 dropped
+
+--
+
+**Prediction:** What penalty leads to the best cross-validated prediction accuracy?
+
+(`tune()` and `tune_grid()` as usual!)
+
+
+---
+## Penalty Parameter
+
+RMSE:
+
+![](index_files/figure-html/unnamed-chunk-6-1.png)&lt;!-- --&gt;
+---
+## Penalty Parameter
+
+One wrinkle in tuning:  The automatic grid chooses values on a log scale, not evenly spaced:
+
+.pull-left[
+
+
+```r
+lam_grid &lt;- grid_regular(penalty(), levels = 10)
+lam_grid
+```
+
+```
+## # A tibble: 10 x 1
+##          penalty
+##            &lt;dbl&gt;
+##  1 0.0000000001 
+##  2 0.00000000129
+##  3 0.0000000167 
+##  4 0.000000215  
+##  5 0.00000278   
+##  6 0.0000359    
+##  7 0.000464     
+##  8 0.00599      
+##  9 0.0774       
+## 10 1
+```
+
+]
+
+.pull-right[
+
+
+```r
+lam_grid_2 &lt;- grid_regular(penalty(c(0, 0.5), trans = NULL),
+                           levels = 10)
+lam_grid_2
+```
+
+```
+## # A tibble: 10 x 1
+##    penalty
+##      &lt;dbl&gt;
+##  1  0     
+##  2  0.0556
+##  3  0.111 
+##  4  0.167 
+##  5  0.222 
+##  6  0.278 
+##  7  0.333 
+##  8  0.389 
+##  9  0.444 
+## 10  0.5
+```
+]
+
+---
+## Penalty Parameter
+
+RMSE, smaller grid:
+
+
+
+---
+class: center, middle, inverse
+
+## Don't forget about **Interpretability!** 
+
+![](https://i.gifer.com/Y8rl.gif)
+
+How many variables do we want to retain?
+
+
+---
+## Number of Variables kept
+
+
+
+---
+## Penalty Parameter
+
+Because our **regularized methods** are de-prioritizing RMSE, they will rarely give us better **prediction residuals**.
+
+--
+
+So, why do it?
+
+--
+
+**LASSO** -&gt;  **Variable selection**
+
+--
+
+If we can achieve *nearly* the same predictive power with *many* fewer variables, we have a more interpretable model.
+
+---
+# Try it!
+
+## Open **Activity-Variable-Selection** from last class
+
+#### Tweak your choice of penalty in your LASSO regression until you get approximately the same number of variables as you did via **stepwise selection**.
+
+#### Are they the same variables?
+
+---
+class: center, middle, inverse
+
+## Model stability
+
+---
+## Model stability
+
+Consider dividing the dataset into 3 randomly split subsets.
+
+--
+
+We fit a **linear model** on *all* predictors for each subset.
+
+--
+
+Should we expect similar answers?
+
+---
+
+
+
+
+&lt;img src="index_files/figure-html/unnamed-chunk-12-1.png" width="60%" /&gt;
+
+---
+
+&lt;img src="index_files/figure-html/unnamed-chunk-13-1.png" width="60%" /&gt;
+
+---
+
+&lt;img src="index_files/figure-html/unnamed-chunk-14-1.png" width="60%" /&gt;
+
+---
+## What's happening?
+
+When we have **many variables**, there is probably some *collinearity*
+
+--
+
+Combinations of variables contain *the same information*.
+
+--
+
+Which ones should we use?
+
+--
+
+The model is very *unstable* with the particular sample.
+
+---
+## Ridge Regression
+
+
+
+&lt;img src="index_files/figure-html/unnamed-chunk-16-1.png" width="60%" /&gt;
+
+---
+
+&lt;img src="index_files/figure-html/unnamed-chunk-17-1.png" width="60%" /&gt;
+
+---
+
+&lt;img src="index_files/figure-html/unnamed-chunk-18-1.png" width="60%" /&gt;
+---
+## Ridge regression
+
+Why does the ridge penalty help?
+
+--
+
+It reduces the **variance** of the **coefficient estimates**.
+
+--
+
+It lets all the variables "share the load" instead of putting too much weight on any one coefficient.
+
+---
+class: center, middle
+
+![](https://media.tenor.com/images/224cf0c6ec020d74b220248ac19efb10/tenor.gif)
+
+---
+## Ridge regression
+
+There is no free lunch!  
+
+--
+
+Lowering the **variance** of the estimates increases the **bias**.
+
+--
+
+In other words - we aren't prioritizing **prediction** or **RMSE** anymore.  Our y-hats are not as close to our y's.
+
+---
+class: center, middle, inverse
+
+# Elastic Net
+
+---
+## Elastic Net
+
+What if we want to **reduce the number of variables** AND **reduce the coefficient variance**??
+
+--
+
+![](https://media1.tenor.com/images/efa0962878857ab3332344f84c41a345/tenor.gif?itemid=3787079)
+
+---
+## Elastic Net
+
+We'll just use **two** penalty terms:
+
+.large[.center[RSS + (lambda/2)(LASSO penalty) + (lambda/2)(Ridge penalty)]]
+
+--
+
+When we do half-and-half, this is called "Elastic Net".
+
+---
+class: center, middle
+
+![](https://girlvsglobe.com/wp-content/uploads/2014/05/83940-Im-a-creative-genius-gif-Kanye-hcuQ1.gif)
+
+---
+## Mixtures of penalties
+
+Why half-and-half?  Why not 1/3 and 2/3?  1/4 and 3/4???
+
+--
+
+Mixture:
+
+`$$RSS + (\alpha)(\lambda)(\text{LASSO penalty}) + (1-\alpha)(\lambda)(\text{Ridge penalty})$$`
+--
+
+`\(\alpha\)` is the `mixture` parameter.
+
+---
+class: center, middle, inverse
+
+# Try it!
+
+## Open **Activity-Variable-Selection** from last class
+
+#### Tune both the **mixture** and the **penalty** parameters.
+
+#### Plot the RMSE and/or R-squared across a few penalties (at one mixture) and across a few mixtures (at one penalty)
+
+---
+class: center, middle, inverse
+
+# Try it!
+
+## Recall: We wanted to predict the **Type** of cannabis from the descriptor words.
+
+## Consider only Indica vs. Sativa  (no Hybrid)
+
+## Can you combine **logistic regression** with **LASSO** to tell me which words best separate Indica and Sativa?
+
+## How does this compare to what you find with a decision tree?
+    </textarea>
+<style data-target="print-only">@media screen {.remark-slide-container{display:block;}.remark-slide-scaler{box-shadow:none;}}</style>
+<script src="https://remarkjs.com/downloads/remark-latest.min.js"></script>
+<script>var slideshow = remark.create({
+"highlightLines": true,
+"highlightStyle": "github",
+"countIncrementalSlides": false,
+"ratio": "16:9"
+});
+if (window.HTMLWidgets) slideshow.on('afterShowSlide', function (slide) {
+  window.dispatchEvent(new Event('resize'));
+});
+(function(d) {
+  var s = d.createElement("style"), r = d.querySelector(".remark-slide-scaler");
+  if (!r) return;
+  s.type = "text/css"; s.innerHTML = "@page {size: " + r.style.width + " " + r.style.height +"; }";
+  d.head.appendChild(s);
+})(document);
+
+(function(d) {
+  var el = d.getElementsByClassName("remark-slides-area");
+  if (!el) return;
+  var slide, slides = slideshow.getSlides(), els = el[0].children;
+  for (var i = 1; i < slides.length; i++) {
+    slide = slides[i];
+    if (slide.properties.continued === "true" || slide.properties.count === "false") {
+      els[i - 1].className += ' has-continuation';
+    }
+  }
+  var s = d.createElement("style");
+  s.type = "text/css"; s.innerHTML = "@media print { .has-continuation { display: none; } }";
+  d.head.appendChild(s);
+})(document);
+// delete the temporary CSS (for displaying all slides initially) when the user
+// starts to view slides
+(function() {
+  var deleted = false;
+  slideshow.on('beforeShowSlide', function(slide) {
+    if (deleted) return;
+    var sheets = document.styleSheets, node;
+    for (var i = 0; i < sheets.length; i++) {
+      node = sheets[i].ownerNode;
+      if (node.dataset["target"] !== "print-only") continue;
+      node.parentNode.removeChild(node);
+    }
+    deleted = true;
+  });
+})();
+(function() {
+  "use strict"
+  // Replace <script> tags in slides area to make them executable
+  var scripts = document.querySelectorAll(
+    '.remark-slides-area .remark-slide-container script'
+  );
+  if (!scripts.length) return;
+  for (var i = 0; i < scripts.length; i++) {
+    var s = document.createElement('script');
+    var code = document.createTextNode(scripts[i].textContent);
+    s.appendChild(code);
+    var scriptAttrs = scripts[i].attributes;
+    for (var j = 0; j < scriptAttrs.length; j++) {
+      s.setAttribute(scriptAttrs[j].name, scriptAttrs[j].value);
+    }
+    scripts[i].parentElement.replaceChild(s, scripts[i]);
+  }
+})();
+(function() {
+  var links = document.getElementsByTagName('a');
+  for (var i = 0; i < links.length; i++) {
+    if (/^(https?:)?\/\//.test(links[i].getAttribute('href'))) {
+      links[i].target = '_blank';
+    }
+  }
+})();
+// adds .remark-code-has-line-highlighted class to <pre> parent elements
+// of code chunks containing highlighted lines with class .remark-code-line-highlighted
+(function(d) {
+  const hlines = d.querySelectorAll('.remark-code-line-highlighted');
+  const preParents = [];
+  const findPreParent = function(line, p = 0) {
+    if (p > 1) return null; // traverse up no further than grandparent
+    const el = line.parentElement;
+    return el.tagName === "PRE" ? el : findPreParent(el, ++p);
+  };
+
+  for (let line of hlines) {
+    let pre = findPreParent(line);
+    if (pre && !preParents.includes(pre)) preParents.push(pre);
+  }
+  preParents.forEach(p => p.classList.add("remark-code-has-line-highlighted"));
+})(document);</script>
+
+<script>
+slideshow._releaseMath = function(el) {
+  var i, text, code, codes = el.getElementsByTagName('code');
+  for (i = 0; i < codes.length;) {
+    code = codes[i];
+    if (code.parentNode.tagName !== 'PRE' && code.childElementCount === 0) {
+      text = code.textContent;
+      if (/^\\\((.|\s)+\\\)$/.test(text) || /^\\\[(.|\s)+\\\]$/.test(text) ||
+          /^\$\$(.|\s)+\$\$$/.test(text) ||
+          /^\\begin\{([^}]+)\}(.|\s)+\\end\{[^}]+\}$/.test(text)) {
+        code.outerHTML = code.innerHTML;  // remove <code></code>
+        continue;
+      }
+    }
+    i++;
+  }
+};
+slideshow._releaseMath(document);
+</script>
+<!-- dynamically load mathjax for compatibility with self-contained -->
+<script>
+(function () {
+  var script = document.createElement('script');
+  script.type = 'text/javascript';
+  script.src  = 'https://mathjax.rstudio.com/latest/MathJax.js?config=TeX-MML-AM_CHTML';
+  if (location.protocol !== 'file:' && /^https?:/.test(script.src))
+    script.src  = script.src.replace(/^https?:/, '');
+  document.getElementsByTagName('head')[0].appendChild(script);
+})();
+</script>
+  </body>
+</html>

@@ -1,0 +1,525 @@
+---
+title: "Tuning Mixtures and Penalties"
+resource_files:
+- appforthat.jpg
+output:
+  xaringan::moon_reader:
+    css: xaringan-themer.css
+    lib_dir: libs
+    nature:
+      highlightLines: yes
+      highlightStyle: github
+      countIncrementalSlides: FALSE
+      ratio: '16:9'
+
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(message = FALSE, warning = FALSE)
+
+library(tidyverse)
+library(tidymodels)
+library(flair)
+library(kknn)
+library(glmnet)
+library(here)
+library(rpart.plot)
+library(discrim)
+
+set.seed(98249)
+```
+
+```{r xaringan-themer, include=FALSE}
+library(xaringanthemer)
+library(xaringanExtra)
+style_mono_light(
+  base_color = "#26116c",
+  text_bold_color = "#fd5e53",
+  title_slide_text_color = "#fff8e7",
+  background_color = "#fff8e7",
+  header_font_google = google_font("Roboto"),
+  text_font_google   = google_font("Roboto Condensed"),
+  code_font_google   = google_font("Droid Mono")
+)
+```
+
+```{css, echo = FALSE}
+.red{ color: red; }
+.blue{ color: blue; }
+.huge {
+  font-size: 200%;
+}
+.large {
+  font-size: 150%;
+}
+.tiny {
+  font-size: 50%;
+}
+```
+---
+class: center, middle, inverse
+
+# The Penalty Hyperparameter
+
+---
+## Penalty Hyperparameter
+
+Recall:  In **ridge** and **LASSO** regression, we add a *penalty* term that is balanced by a parameter $\lambda$
+
+--
+
+$$\text{minimize:} \; \;  RSS + \lambda * \text{penalty}$$
+
+---
+## Penalty Hyperparameter
+
+What is the "best" choice of $\lambda$?
+
+--
+
+![](https://media2.giphy.com/media/oBsRsvl2EfHMI/giphy.gif)
+
+---
+class: center, middle
+
+![](https://upload.wikimedia.org/wikipedia/en/4/44/Try_Everything_%28Shakira%29.jpg)
+
+---
+## Penalty Parameter
+
+Last class, we tried two LASSO models:
+
+
+```{r}
+lasso_1 <- linear_reg(penalty = 0.1, mixture = 1) %>%
+  set_engine("glmnet") %>%
+  set_mode("regression")
+
+lasso_5 <- linear_reg(penalty = 0.5, mixture = 1) %>%
+  set_engine("glmnet") %>%
+  set_mode("regression")
+```
+
+---
+## Penalty Parameter
+
+We found that larger penalty parameter led to more coefficients of 0  (i.e., excluded variables):
+
+
+```{r, include = FALSE}
+cann <- read_csv("https://www.dropbox.com/s/s2a1uoiegitupjc/cannabis_full.csv?dl=1")
+
+cann <- cann %>%
+  select(-Type, -Strain, -Effects, -Flavor, -Dry, -Mouth) %>%
+  drop_na()
+
+```
+
+.pull-left[
+
+```{r, echo = FALSE}
+res1 <- lasso_1 %>%
+  fit(Rating ~ ., cann) %>%
+  tidy()
+
+res1
+```
+
+]
+
+.pull-left[
+
+```{r, echo = FALSE}
+res5 <- lasso_5 %>%
+  fit(Rating ~ ., cann) %>%
+  tidy()
+
+res5
+```
+
+]
+
+---
+## Penalty Parameter
+
+$\lambda = 0.1 \rightarrow$  7 variables kept, 56 dropped
+
+$\lambda = 0.5 \rightarrow$  0 variables kept, 63 dropped
+
+--
+
+**Prediction:** What penalty leads to the best cross-validated prediction accuracy?
+
+(`tune()` and `tune_grid()` as usual!)
+
+
+---
+## Penalty Parameter
+
+RMSE:
+
+```{r, echo = FALSE, cache = TRUE}
+lam_grid <- grid_regular(penalty(), levels = 10)
+
+cann_cvs <- vfold_cv(cann, 5)
+
+lasso_spec <- linear_reg(penalty = tune(), mixture = 1) %>%
+  set_engine("glmnet") %>%
+  set_mode("regression")
+
+wflow_lasso <- workflow() %>%
+  add_model(lasso_spec) %>%
+  add_recipe(
+    recipe(Rating ~ ., data = cann)
+  )
+
+lam_grid <- grid_regular(penalty(), levels = 10)
+
+tune_res <- wflow_lasso %>%
+  tune_grid(
+    resamples = cann_cvs,
+    grid = lam_grid
+  )
+
+tune_res %>%
+  collect_metrics() %>%
+  filter(.metric == "rmse") %>%
+  ggplot(aes(x = penalty, y = mean)) +
+  geom_line()
+```
+---
+## Penalty Parameter
+
+One wrinkle in tuning:  The automatic grid chooses values on a log scale, not evenly spaced:
+
+.pull-left[
+
+```{r}
+lam_grid <- grid_regular(penalty(), levels = 10)
+lam_grid
+```
+
+]
+
+.pull-right[
+
+```{r}
+
+lam_grid_2 <- grid_regular(penalty(c(0, 0.5), trans = NULL),
+                           levels = 10)
+lam_grid_2
+```
+]
+
+---
+## Penalty Parameter
+
+RMSE, smaller grid:
+
+```{r, include = FALSE, cache = TRUE}
+
+cann_cvs <- vfold_cv(cann, 5)
+
+lasso_spec <- linear_reg(penalty = tune(), mixture = 1) %>%
+  set_engine("glmnet") %>%
+  set_mode("regression")
+
+wflow_lasso <- workflow() %>%
+  add_model(lasso_spec) %>%
+  add_recipe(
+    recipe(Rating ~ ., data = cann)
+  )
+
+lam_grid <- grid_regular(penalty(), levels = 10)
+
+tune_res <- wflow_lasso %>%
+  tune_grid(
+    resamples = cann_cvs,
+    grid = lam_grid_2
+  )
+
+tune_res %>%
+  collect_metrics() %>%
+  filter(.metric == "rmse") %>%
+  ggplot(aes(x = penalty, y = mean)) +
+  geom_line()
+```
+
+---
+class: center, middle, inverse
+
+## Don't forget about **Interpretability!** 
+
+![](https://i.gifer.com/Y8rl.gif)
+
+How many variables do we want to retain?
+
+
+---
+## Number of Variables kept
+
+```{r, include = FALSE}
+
+count_nonzero_vars <- function(lambda) {
+  
+  linear_reg(mixture = 1, penalty = lambda) %>%
+    set_mode("regression") %>%
+    set_engine("glmnet") %>%
+    fit(Rating ~ ., data= cann) %>%
+    tidy() %>%
+    filter(estimate != 0) %>%
+    nrow()
+  
+  
+}
+
+
+lam_grid_2 <- lam_grid_2 %>%
+  mutate(
+    num_vars = map_int(penalty, count_nonzero_vars)
+  )
+
+lam_grid_2 %>%
+  ggplot(aes(x = penalty, y = num_vars)) +
+  geom_col()
+
+
+```
+
+---
+## Penalty Parameter
+
+Because our **regularized methods** are de-prioritizing RMSE, they will rarely give us better **prediction residuals**.
+
+--
+
+So, why do it?
+
+--
+
+**LASSO** ->  **Variable selection**
+
+--
+
+If we can achieve *nearly* the same predictive power with *many* fewer variables, we have a more interpretable model.
+
+---
+# Try it!
+
+## Open **Activity-Variable-Selection** from last class
+
+#### Tweak your choice of penalty in your LASSO regression until you get approximately the same number of variables as you did via **stepwise selection**.
+
+#### Are they the same variables?
+
+---
+class: center, middle, inverse
+
+## Model stability
+
+---
+## Model stability
+
+Consider dividing the dataset into 3 randomly split subsets.
+
+--
+
+We fit a **linear model** on *all* predictors for each subset.
+
+--
+
+Should we expect similar answers?
+
+---
+
+
+```{r, echo = FALSE,  cache = TRUE}
+cann_split <- vfold_cv(cann, 3)
+
+rs_dfs <- cann_split$splits %>%
+  map(~tidy(lm(Rating ~ ., as.data.frame(.x))))
+
+```
+
+```{r, echo = FALSE, out.width='60%'}
+rs_dfs[[1]] %>%
+  ggplot(aes(x = term, y = estimate)) +
+  geom_col()+
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+```
+
+---
+
+```{r, echo = FALSE, out.width='60%'}
+rs_dfs[[2]] %>%
+  ggplot(aes(x = term, y = estimate)) +
+  geom_col()  +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+
+```
+
+---
+
+```{r, echo = FALSE, out.width='60%'}
+
+rs_dfs[[3]] %>%
+  ggplot(aes(x = term, y = estimate)) +
+  geom_col()+
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+
+```
+
+---
+## What's happening?
+
+When we have **many variables**, there is probably some *collinearity*
+
+--
+
+Combinations of variables contain *the same information*.
+
+--
+
+Which ones should we use?
+
+--
+
+The model is very *unstable* with the particular sample.
+
+---
+## Ridge Regression
+
+```{r, echo = FALSE,  cache = TRUE}
+ridge_spec <- linear_reg(mode = "regression", penalty = .3, mixture = 0) %>%
+  set_engine("glmnet")
+
+rs_dfs <- cann_split$splits %>%
+  map(~ ridge_spec %>% fit(Rating ~ ., as.data.frame(.x)) %>% tidy())
+
+```
+
+```{r, echo = FALSE, out.width='60%'}
+rs_dfs[[1]] %>%
+  ggplot(aes(x = term, y = estimate)) +
+  geom_col()+
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+```
+
+---
+
+```{r, echo = FALSE, out.width='60%'}
+rs_dfs[[2]] %>%
+  ggplot(aes(x = term, y = estimate)) +
+  geom_col()  +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+
+```
+
+---
+
+```{r, echo = FALSE, out.width='60%'}
+
+rs_dfs[[3]] %>%
+  ggplot(aes(x = term, y = estimate)) +
+  geom_col()+
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+
+```
+---
+## Ridge regression
+
+Why does the ridge penalty help?
+
+--
+
+It reduces the **variance** of the **coefficient estimates**.
+
+--
+
+It lets all the variables "share the load" instead of putting too much weight on any one coefficient.
+
+---
+class: center, middle
+
+![](https://media.tenor.com/images/224cf0c6ec020d74b220248ac19efb10/tenor.gif)
+
+---
+## Ridge regression
+
+There is no free lunch!  
+
+--
+
+Lowering the **variance** of the estimates increases the **bias**.
+
+--
+
+In other words - we aren't prioritizing **prediction** or **RMSE** anymore.  Our y-hats are not as close to our y's.
+
+---
+class: center, middle, inverse
+
+# Elastic Net
+
+---
+## Elastic Net
+
+What if we want to **reduce the number of variables** AND **reduce the coefficient variance**??
+
+--
+
+![](https://media1.tenor.com/images/efa0962878857ab3332344f84c41a345/tenor.gif?itemid=3787079)
+
+---
+## Elastic Net
+
+We'll just use **two** penalty terms:
+
+.large[.center[RSS + (lambda/2)(LASSO penalty) + (lambda/2)(Ridge penalty)]]
+
+--
+
+When we do half-and-half, this is called "Elastic Net".
+
+---
+class: center, middle
+
+![](https://girlvsglobe.com/wp-content/uploads/2014/05/83940-Im-a-creative-genius-gif-Kanye-hcuQ1.gif)
+
+---
+## Mixtures of penalties
+
+Why half-and-half?  Why not 1/3 and 2/3?  1/4 and 3/4???
+
+--
+
+Mixture:
+
+$$RSS + (\alpha)(\lambda)(\text{LASSO penalty}) + (1-\alpha)(\lambda)(\text{Ridge penalty})$$
+--
+
+$\alpha$ is the `mixture` parameter.
+
+---
+class: center, middle, inverse
+
+# Try it!
+
+## Open **Activity-Variable-Selection** from last class
+
+#### Tune both the **mixture** and the **penalty** parameters.
+
+#### Plot the RMSE and/or R-squared across a few penalties (at one mixture) and across a few mixtures (at one penalty)
+
+---
+class: center, middle, inverse
+
+# Try it!
+
+## Recall: We wanted to predict the **Type** of cannabis from the descriptor words.
+
+## Consider only Indica vs. Sativa  (no Hybrid)
+
+## Can you combine **logistic regression** with **LASSO** to tell me which words best separate Indica and Sativa?
+
+## How does this compare to what you find with a decision tree?
