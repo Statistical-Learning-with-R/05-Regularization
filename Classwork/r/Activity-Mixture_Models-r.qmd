@@ -1,0 +1,54 @@
+---
+title: "Variable Selection and Regularization"
+author: "YOUR NAME HERE"
+format: 
+  html:
+    code-fold: true
+    code-line-numbers: true
+    code-tools: true
+    self-contained: true
+editor: visual
+execute:
+  message: false
+---
+
+## Setup
+
+Declare your libraries:
+
+```{r}
+#| label: libraries-r
+#| include: false
+library(tidyverse)
+library(tidymodels)
+library(glmnet)
+library(discrim)
+library(rpart)
+library(rpart.plot)
+library(baguette)
+```
+
+
+# **Try it!**
+
+## **Recall: We wanted to predict the Type of cannabis from the descriptor words.**
+
+## **Consider only Indica vs. Sativa (no Hybrid)**
+
+## **Can you combine logistic regression with LASSO to tell me which words best separate Indica and Sativa?**
+
+## **How does this compare to what you find with a decision tree?**
+
+```{r}
+
+cann <- read_csv("https://www.dropbox.com/s/s2a1uoiegitupjc/cannabis_full.csv?dl=1")
+
+cann <- cann %>%
+  select(-Strain, -Effects, -Flavor, -Dry, -Mouth)
+
+cann_is <- cann %>%
+  filter(Type != "Hybrid")
+
+head(cann_is)
+```
+

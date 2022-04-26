@@ -1,0 +1,289 @@
+---
+title: "Lab 5: Variable Selection and Regularization"
+author: "YOUR NAME HERE"
+format: 
+  html:
+    code-fold: true
+    code-line-numbers: true
+    code-tools: true
+    self-contained: true
+editor: visual
+execute:
+  message: false
+---
+
+```{r, eval = TRUE, version = "none"}
+templar::versions_quarto_multilingual(global_eval = FALSE, to_jupyter = TRUE, warn_edit = FALSE)
+```
+
+## Setup
+
+Declare your libraries:
+
+```{r, version = "R"}
+#| label: libraries-r
+#| include: false
+library(tidyverse)
+library(tidymodels)
+library(glmnet)
+library(discrim)
+library(rpart)
+library(rpart.plot)
+library(baguette)
+```
+
+```{python, version = "python"}
+#| label: libraries-py
+#| include: false
+import pandas as pd
+
+import seaborn as sns
+import matplotlib.pyplot as plt
+
+
+from sklearn.linear_model import LinearRegression, LogisticRegression, Lasso, Ridge
+from sklearn.neighbors import KNeighborsRegressor, KNeighborsClassifier
+
+from sklearn.metrics import r2_score, confusion_matrix, accuracy_score, precision_score, recall_score, roc_auc_score, make_scorer
+
+from sklearn.preprocessing import OneHotEncoder, StandardScaler, LabelEncoder
+from sklearn.compose import make_column_transformer
+from sklearn.pipeline import Pipeline, make_pipeline
+
+from sklearn.model_selection import cross_val_score, GridSearchCV, KFold
+
+from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
+from sklearn.discriminant_analysis import QuadraticDiscriminantAnalysis
+
+from sklearn.tree import DecisionTreeClassifier, plot_tree
+
+from sklearn.ensemble import BaggingClassifier, RandomForestClassifier
+
+from sklearn.feature_selection import SequentialFeatureSelector
+
+from itertools import combinations
+
+import statsmodels.api as sm
+
+from random import sample, seed
+
+```
+
+
+# Dataset:  Gene Expression
+
+Technology for measuring gene expression from human blood samples first became generally available to scientists in the 1990s.  It was quickly found that this information was extremely powerful for predicting and categorizing diseases in humans, especially cancers.
+
+At the time, it was very costly to process even a single sample.  Thus, it was common to have datasets with large numbers of variables (genes) but very small numbers of samples (people).  This data format went against all of classical statistics, which tends to assume many samples on a few variables.  The field had to adapt accordingly, leading to methods like LASSO Regression.
+
+Historical interlude:  This area of study in statistics was called "High Dimension, Low Sample Size". Nowadays, the technology is much cheaper, and we often have very large sample sizes as well as very large variable sizes - another new problem for the early to mid 2000s that we called"Big Data".  You can also read the original LASSO paper from 1996 here, if you're interested: https://statweb.stanford.edu/~tibs/lasso/lasso.pdf.  Fun fact: it's the second-most cited paper in all of statistics!
+
+This lab's data is taken from a paper in 1999, which used clustering and classification techniques to classify patients between two types of cancer:  acute myeloid leukemia (AML) and acute lymphoblastic leukemia (ALL).
+
+You can read the paper here (although you don't need to for this lab):
+https://webdocs.cs.ualberta.ca/~rgreiner/R/OLD-BiCluster/Golub_et_al_1999.pdf
+
+In this lab, we'll see if we can learn more about the genetic drivers of AML and ALL via modern statistical learning techniques.
+
+
+Load the main dataset, and the validation set:
+
+```{r, version = "R"}
+genes <- read_csv("https://www.dropbox.com/s/flphnbie8ekaudj/genes_cancer_train.csv?dl=1") 
+genes_validation <- read_csv("https://www.dropbox.com/s/fyka8qinqzhl3pl/genes_cancer_validate.csv?dl=1")
+```
+
+```{python, version = "python"}
+genes = pd.read_csv("https://www.dropbox.com/s/flphnbie8ekaudj/genes_cancer_train.csv?dl=1") 
+genes_validation = pd.read_csv("https://www.dropbox.com/s/fyka8qinqzhl3pl/genes_cancer_validate.csv?dl=1")
+```
+
+For most of this lab (right up until the end), we will use a smaller version of the datasets, so as not to murder your personal computers and/or RStudio Cloud account.  We'll choose a random 100 of the variables: 
+
+```{r, version = "R"}
+set.seed(282)
+
+random_columns <- sample(3:ncol(genes), 500)
+
+genes_sub <- genes[, c(1, 2, random_columns)]
+```
+
+```{python, version = "python"}
+seed(282)
+
+genes_sub = genes.sample(axis = 'columns', n = 500)
+genes_sub['cancer'] = genes['cancer']
+genes_sub['patient'] = genes['patient']
+```
+
+
+#### Warnings
+
+A few words of caution for this lab:
+
+1.  Don't forget to clean and adjust your data.  You'll need to drop the id column (`patient`), since we don't want to use the patient number as a predictor.  An elegant way to do this - although not required - is to use `update_role()` in your recipe; see: https://recipes.tidymodels.org/articles/Roles.html
+
+2. There are a **lot** of variables in the dataset!  You'll be using the `cancer ~ .` trick in your recipes and model formulas, rather than typing out a ton of gene names.  Be careful what kind of models and functions you put this into; some might overwhelm your computer.
+
+3. In particular, be careful when using the `regsubsets()` function.  Make sure you avoid the exhaustive (all subsets) search... You'd be asking your computer to fit more models than there are atoms in the universe!  Make **absolutely** sure that you set the `method` to be either "forward" or "backward", and also that you choose a value for `nvmax`.
+
+4. Even with the above precautions, we are getting into Big Computation territory.  Small errors in this lab have the potential to crash your R session.  Save your R Markdown (and any other unsaved files on your computer frequently), and don't be afraid to force-quit RStudio if you accidentally run something bigger than you meant to.  When in doubt, **start with small examples** and work your way up!
+
+5. Use `glmnet` as your engine whenever you are doing LASSO or Ridge of any kind.
+
+
+
+# Part One: Classification without regularization
+
+**IMPORTANT:**  *Use your `genes_sub` dataset for everything in this part.*
+
+#### Q1:  Decision Tree.
+
+Fit a decision tree to this data.  Which genes does it designate as most important for differentiating ALL and AML cancers?  How pure are the nodes?
+
+
+#### Q2:  Validation.
+
+Use your tree to predict on the validation set.  How did it do?
+
+
+#### Q3: Explanation.
+
+Give an intuitive explanation for why the above occurred.
+
+
+That is to say:  Your tree should have only one split, so it can't be too overfit. It should also have very good node purity, suggesting good predictive power.  But the accuracy in Q2 is not as high as the node purity would suggest.  Why is this?
+
+
+
+#### Q4: Random Forest.
+
+Now fit a Random Forest, and then predict on the validation set.  How does this compare to a single decision tree?  Give an explanation for the difference in results.
+
+
+# Part Two:  Variable Selection
+
+#### Q1:  Stepwise selection.
+
+Use forwards or backwards selection (your choice) to choose the ideal number of variables, up to a maximum of 10.  Which genes are chosen?
+
+
+Hint: You will have to convert `cancer` to a fake quantitative variable first.  This is obviously not really justifiable, and it's not what we'd do if we were serious about stepwise selection - but we're just making a fast-and-dirty comparison here.
+
+The code below will do the trick.
+
+
+```{r, version = "R"}
+genes_weird <- genes_sub %>%
+  mutate(
+    cancer = as.integer(factor(cancer))
+  )
+```
+
+```{python, version = "python"}
+genes_weird = genes_sub 
+
+genes_weird['cancer'] = (genes_sub['cancer'] == 'ALL')*1
+```
+
+%%% version: R
+
+Hint 2:  To find the selected variables from a particular row of the "asterisks" output, use:
+
+%%%
+
+
+```{r, eval = FALSE}
+vars <- summary(models)$outmat[1,]
+names(vars[vars == "*"])
+```
+
+
+#### Q2: LASSO.
+
+Tune a LASSO regression.  Identify the largest penalty parameter that doesn't cause you to lose any prediction accuracy. 
+
+%%% version: R
+
+Hint: Use the following lambda grid.  Make sure you take a look at the range of values that it chooses, rather than just copy pasting the code.
+
+%%%
+
+```{r, version = "R"}
+lam_grid <- grid_regular(penalty(c(-10, 0), trans = log2_trans()), levels = 10)
+```
+
+
+#### Q3: LASSO Variable Selection.
+
+Using the penalty chosen in Q2, fit a final LASSO model on the **full data** (that is, on `genes` not on `genes_sub`).  What genes were selected?
+
+
+# Part Three: Reducing variance of coefficients
+
+#### Q1: Ordinary logistic regression.
+
+Randomly divide the observations in the dataset (back to `genes_sub`) in half.
+Fit a logistic regression on the  with no penalty term to each half.
+
+Report the estimates for the first five listed predictors.  How different were they between the two subsamples of the datset?
+
+
+#### Q2: Ridge regression - tuning.
+
+Tune a logistic regression with ridge penalty on `genes_sub`.  Once again, choose the largest penalty that does not noticeably decrease the accuracy.
+
+
+#### Q3: Comparison
+
+Fit a logistic regression with the penalty selected in Q2 on the two random halves of the dataset that you created in Q1.
+
+Compare the estimates of the first five variables.  How different were they?
+
+
+#### Q4: Explanation
+
+In your own words, give an explanation for what we saw in Q1 versus in Q3.
+
+# Part Four: A final model
+
+#### Q1: Tuning
+
+Using `genes_sub`, tune both the penalty and the mixture term.  
+Choose the penalty that is largest without losing accuracy.
+
+Interpret the selected `mixture` parameter in words.
+
+
+Hint: remember that the `levels` argument in your `grid_regular` function is telling you the number of unique values of **each** parameter that will be tried!
+
+
+
+#### Q2: Conclusion
+
+Using the parameters you selected above, fit your model to the **full dataset**.
+
+How many genes were selected?  Which seem to be most important?
+
+Report the performance of the model on the validation set.
+
+
+
+## Challenge 1: Science!
+
+Follow up on your chosen genes.  You can refer back to the original paper linked at the top and see how your selected genes compare to theirs, and/or search online for information about these genes.   
+
+For **10 Challenge Points**, give me an interesting science fact related to this analysis and your chosen genes.
+
+## Challenge 2: LASSO vs Linear
+
+For **10 Challenge Points:**
+
+Choose a dataset that we've studied in this course, or a new one if you prefer, that has a good number of variables and a *numeric* response.
+
+Tune and fit a LASSO model.
+Then fit an ordinary linear model, using only the variables chosen by the LASSO.
+Compare the coefficient estimates of these models.
+
+For up to **10 Extra Challenge Points**, present your findings in tutorial form, as if you are teaching someone new about the differences between LASSO and unpenalized linear regression.
+

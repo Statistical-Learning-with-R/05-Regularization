@@ -1,0 +1,75 @@
+---
+title: "Variable Selection and Regularization"
+author: "YOUR NAME HERE"
+format: 
+  html:
+    code-fold: true
+    code-line-numbers: true
+    code-tools: true
+    self-contained: true
+editor: visual
+execute:
+  message: false
+jupyter: python3
+---
+
+## Setup
+
+Declare your libraries:
+
+
+```{python}
+#| label: libraries-py
+#| include: false
+import pandas as pd
+
+import seaborn as sns
+import matplotlib.pyplot as plt
+
+from sklearn.linear_model import LinearRegression, LogisticRegression, Lasso, Ridge, ElasticNet
+from sklearn.neighbors import KNeighborsRegressor, KNeighborsClassifier
+
+from sklearn.metrics import r2_score, confusion_matrix, accuracy_score, precision_score, recall_score, roc_auc_score, make_scorer
+
+from sklearn.preprocessing import OneHotEncoder, StandardScaler, LabelEncoder
+from sklearn.compose import make_column_transformer
+from sklearn.pipeline import Pipeline, make_pipeline
+
+from sklearn.model_selection import cross_val_score, GridSearchCV, KFold
+
+from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
+from sklearn.discriminant_analysis import QuadraticDiscriminantAnalysis
+
+from sklearn.tree import DecisionTreeClassifier, plot_tree, RandomForestClassifier
+
+from sklearn.ensemble import BaggingClassifier
+
+from itertools import combinations
+
+import statsmodels.api as sm
+
+```
+
+# **Try it!**
+
+## **Recall: We wanted to predict the Type of cannabis from the descriptor words.**
+
+## **Consider only Indica vs. Sativa (no Hybrid)**
+
+## **Can you combine logistic regression with LASSO to tell me which words best separate Indica and Sativa?**
+
+## **How does this compare to what you find with a decision tree?**
+
+
+```{python}
+
+cann = pd.read_csv("https://www.dropbox.com/s/s2a1uoiegitupjc/cannabis_full.csv?dl=1")
+
+cann["Type"] = cann["Type"].astype("category")
+cann = cann.dropna() 
+
+cann = cann.drop(columns = ["Strain", "Effects", "Flavor", "Dry", "Mouth"])
+
+cann_X = cann.drop(columns = ["Type"])
+
+```

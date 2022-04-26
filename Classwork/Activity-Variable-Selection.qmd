@@ -1,0 +1,198 @@
+---
+title: "Variable Selection and Regularization"
+author: "YOUR NAME HERE"
+format: 
+  html:
+    code-fold: true
+    code-line-numbers: true
+    code-tools: true
+    self-contained: true
+editor: visual
+execute:
+  message: false
+---
+
+```{r, eval = TRUE, version = "none"}
+templar::versions_quarto_multilingual(global_eval = FALSE, to_jupyter = TRUE, warn_edit = FALSE)
+```
+
+## Setup
+
+Declare your libraries:
+
+```{r, version = "R"}
+#| label: libraries-r
+#| include: false
+library(tidyverse)
+library(tidymodels)
+library(glmnet)
+library(discrim)
+library(rpart)
+library(rpart.plot)
+library(baguette)
+```
+
+```{python, version = "python"}
+#| label: libraries-py
+#| include: false
+import pandas as pd
+
+import seaborn as sns
+import matplotlib.pyplot as plt
+
+
+from sklearn.linear_model import LinearRegression, LogisticRegression, Lasso, Ridge
+from sklearn.neighbors import KNeighborsRegressor, KNeighborsClassifier
+
+from sklearn.metrics import r2_score, confusion_matrix, accuracy_score, precision_score, recall_score, roc_auc_score, make_scorer
+
+from sklearn.preprocessing import OneHotEncoder, StandardScaler, LabelEncoder
+from sklearn.compose import make_column_transformer
+from sklearn.pipeline import Pipeline, make_pipeline
+
+from sklearn.model_selection import cross_val_score, GridSearchCV, KFold
+
+from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
+from sklearn.discriminant_analysis import QuadraticDiscriminantAnalysis
+
+from sklearn.tree import DecisionTreeClassifier, plot_tree
+
+from sklearn.ensemble import BaggingClassifier, RandomForestClassifier
+
+from sklearn.feature_selection import SequentialFeatureSelector
+
+from itertools import combinations
+
+import statsmodels.api as sm
+
+```
+
+## Code from Lecture
+
+```{r, version = "R"}
+cann <- read_csv("https://www.dropbox.com/s/s2a1uoiegitupjc/cannabis_full.csv?dl=1")
+
+cann <- cann %>%
+  select(-Type, -Strain, -Effects, -Flavor, -Dry, -Mouth) %>%
+  drop_na()
+
+head(cann)
+```
+
+```{python, version = "python"}
+
+cann = pd.read_csv("https://www.dropbox.com/s/s2a1uoiegitupjc/cannabis_full.csv?dl=1")
+
+
+cann = cann.drop(columns = ["Strain", "Effects", "Flavor", "Dry", "Mouth", "Type"])
+cann = cann.dropna() 
+
+cann_X = cann.drop(columns = ["Rating"])
+
+```
+
+```{r, version = "R"}
+models <- regsubsets(Rating ~ Creative + Energetic + Tingly, 
+                     data = cann, method = "exhaustive")
+
+summary(models)
+```
+
+```{r, version = "R"}
+summary(models)$adjr2  # bigger is better
+summary(models)$cp     # smaller is better
+summary(models)$bic    # more negative is better
+```
+
+```{python, version = "python"}
+X = cann_X[['Creative', 'Energetic', 'Tingly']]
+
+y = cann['Rating']
+
+features = ['Creative', 'Energetic', 'Tingly']
+n_features = X.shape[1]
+      
+for k in range(1, 4):
+  subsets = combinations(features, k)
+  for subset in subsets:
+    tmp_X = X[list(subset)]
+    tmp_X = sm.add_constant(tmp_X)
+    model = sm.OLS(y, tmp_X).fit()
+    print(list(subset))
+    print(model.bic)
+```
+
+```{r, version = "R"}
+
+models <- regsubsets(Rating ~ ., 
+                     data = cann, method = "forward",
+                     nvmax = 61)
+
+summary(models)
+```
+
+```{r, version = "R"}
+bic_scores <- summary(models)$bic
+bic_scores
+```
+
+```{r, version = "R"}
+ggplot(, aes(x = 1:61, y = bic_scores)) +
+  geom_point()
+```
+
+```{r, version = "R"}
+which.min(bic_scores)
+summary(models)$outmat[13,]
+```
+
+```{python, version = "python"}
+lr = LinearRegression()
+
+for k in range(1, 10):
+  sfs = SequentialFeatureSelector(lr, n_features_to_select=k, direction = 'forward')
+  sfs.fit(cann_X, cann['Rating'])
+  selected = list(sfs.support_)
+  feat_names = cann_X.columns[selected].to_list()
+  tmp_X = cann_X.loc[:, selected]
+  tmp_X = sm.add_constant(tmp_X)
+  model = sm.OLS(y, tmp_X).fit()
+  print(feat_names) 
+  print(model.bic)
+```
+
+## Try it!
+
+#### Determine the best model via **backwards selection**. Fit that model to the data and report results.
+
+#### Determine the best model via **forwards selection**. Fit that model to the data and report results.
+
+## Regularization Code from Lecture
+
+```{r, version = "R"}
+lasso_spec <- linear_reg(penalty = 0.1, mixture = 1) %>%
+  set_engine("glmnet") %>%
+  set_mode("regression")
+```
+
+```{r, version = "R"}
+ridge_spec <- linear_reg(penalty = 0.1, mixture = 0) %>%
+  set_engine("glmnet") %>%
+  set_mode("regression")
+```
+
+```{python, version = "python"}
+lasso_spec = Lasso(alpha = 0.1)
+
+ridge_spec = Ridge(alpha = 0.1)
+```
+
+## Try it!
+
+#### Fit a **LASSO** model to the cannabis data with lambda = 0.1. Then fit one with lambda = 0.5. What is different?
+
+#### Fit a **Ridge Regression** model to the cannabis data with lambda = 0.1. Then fit one with lambda = 0.5. What is different?
+
+#### Which model do you prefer?
+
+#### (Bonus) What is the best choice of lambda?
