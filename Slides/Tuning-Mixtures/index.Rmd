@@ -216,7 +216,7 @@ lam_grid_2
 
 RMSE, smaller grid:
 
-```{r, include = FALSE, cache = TRUE}
+```{r, echo = FALSE, cache = TRUE}
 
 cann_cvs <- vfold_cv(cann, 5)
 
@@ -258,7 +258,7 @@ How many variables do we want to retain?
 ---
 ## Number of Variables kept
 
-```{r, include = FALSE}
+```{r, echo = FALSE}
 
 count_nonzero_vars <- function(lambda) {
   
@@ -343,6 +343,7 @@ rs_dfs <- cann_split$splits %>%
 
 ```{r, echo = FALSE, out.width='60%'}
 rs_dfs[[1]] %>%
+  slice(-1) %>%
   ggplot(aes(x = term, y = estimate)) +
   geom_col()+
   theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
@@ -352,6 +353,7 @@ rs_dfs[[1]] %>%
 
 ```{r, echo = FALSE, out.width='60%'}
 rs_dfs[[2]] %>%
+    slice(-1) %>%
   ggplot(aes(x = term, y = estimate)) +
   geom_col()  +
   theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
@@ -363,6 +365,7 @@ rs_dfs[[2]] %>%
 ```{r, echo = FALSE, out.width='60%'}
 
 rs_dfs[[3]] %>%
+    slice(-1) %>%
   ggplot(aes(x = term, y = estimate)) +
   geom_col()+
   theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
@@ -400,6 +403,7 @@ rs_dfs <- cann_split$splits %>%
 
 ```{r, echo = FALSE, out.width='60%'}
 rs_dfs[[1]] %>%
+    slice(-1) %>%
   ggplot(aes(x = term, y = estimate)) +
   geom_col()+
   theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
@@ -409,6 +413,7 @@ rs_dfs[[1]] %>%
 
 ```{r, echo = FALSE, out.width='60%'}
 rs_dfs[[2]] %>%
+    slice(-1) %>%
   ggplot(aes(x = term, y = estimate)) +
   geom_col()  +
   theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
@@ -420,6 +425,7 @@ rs_dfs[[2]] %>%
 ```{r, echo = FALSE, out.width='60%'}
 
 rs_dfs[[3]] %>%
+    slice(-1) %>%
   ggplot(aes(x = term, y = estimate)) +
   geom_col()+
   theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))

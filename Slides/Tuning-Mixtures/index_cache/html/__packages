@@ -1,4 +1,3 @@
-base
 tidyverse
 ggplot2
 tibble
@@ -30,3 +29,4 @@ rpart.plot
 discrim
 xaringanthemer
 xaringanExtra
+workflowsets
